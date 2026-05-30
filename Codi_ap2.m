@@ -1,0 +1,369 @@
+clear; clc;
+
+%% ================================================================
+%  TURBOFAN performance calc with convergent nozzles
+%
+%  Freestream -> Inlet -> Fan -> Secondary nozzle -> LPC -> HPC -> Combustor -> HPT -> LPT -> Primary nozzle
+%
+% ================================================================
+
+
+%% ================================================================
+%  1. INPUT DATA
+% ================================================================
+
+% -------------------------
+% Flight condition
+% -------------------------
+M0 = 0.79;                 % [-]
+T0 = 216.65;               % [K]
+p0 = 0.19e5;               % [Pa]
+
+% -------------------------
+% Reference conditions
+% -------------------------
+Tref = 300;                % [K]
+pref = 1e5;                % [Pa]
+
+% -------------------------
+% Mass flows
+% -------------------------
+mdot_core = 28.14;         % [kg/s]
+mdot_sec  = 309.50;        % [kg/s]
+mdot0     = 337.64;        % [kg/s]
+
+% Bypass ratio
+alpha = 11;
+
+% -------------------------
+% Pressure ratios
+% -------------------------
+pi_d   = 0.96;             % inlet pressure recovery
+pi_fan = 1.5;              % fan pressure ratio
+pi_LPC = 3.03;             % low pressure compressor ratio
+pi_HPC = 6.6;              % high pressure compressor ratio
+pi_b   = 0.95;             % combustor pressure ratio
+
+% Overall pressure ratio check:
+OPR = pi_fan*pi_LPC*pi_HPC;
+
+% -------------------------
+% Efficiencies
+% -------------------------
+eta_fan = 0.85;
+eta_LPC = 0.85;
+eta_HPC = 0.85;
+
+eta_HPT = 0.83;
+eta_LPT = 0.85;
+
+eta_m = 0.995;             % mechanical efficiency
+
+eta_n_p = 0.90;            % primary nozzle efficiency
+eta_n_s = 0.91;            % secondary nozzle efficiency
+
+eta_b = 1.0;               % combustion efficiency
+
+% -------------------------
+% Gas properties
+% -------------------------
+gamma_a = 1.4;
+cp_a = 1004.5;             % [J/(kg K)]
+R_a = 287;                 % [J/(kg K)]
+
+gamma_f = 1.3;
+cp_f = 1239;               % [J/(kg K)]
+R_f = cp_f*(gamma_f - 1)/gamma_f;
+
+% -------------------------
+% Combustion
+% -------------------------
+Tt4 = 1800;                % [K]
+h_PR = 42.5e6;             % [J/kg]
+
+
+%% ================================================================
+%  2. FREESTREAM
+% ================================================================
+
+%  Inlet flight conditions.
+
+T_0  = T0;
+Tt_0 = total_temperature(T0, M0, gamma_a);
+
+p_0  = p0;
+pt_0 = total_pressure(p0, M0, gamma_a);
+
+v_0 = M0*sqrt(gamma_a*R_a*T0);
+
+
+%% ================================================================
+%  3. INLET
+% ================================================================
+
+%  The inlet is assumed adiabatic, so Tt2 = Tt0
+Tt_2 = Tt_0;
+
+pt_2 = pi_d*pt_0;
+
+
+%% ================================================================
+%  4. FAN
+% ================================================================
+
+pt_13 = pi_fan*pt_2;
+Tt_13 = compressor_Tout(Tt_2, pi_fan, gamma_a, eta_fan);
+
+
+%% ================================================================
+%  5. SECONDARY NOZZLE
+% ================================================================
+
+%  Since the sec nozzle is convergent, the max possible exit Mach is 1.
+%
+%  The code will check whether the nozzle is choked or not, so
+%      if p_ambient <= p_critical  -> choked, M = 1
+%      else  -> unchoked, p_exit = p_ambient
+
+[T_19, p_19, v_19, M_19, choked_sec] = convergent_nozzle(Tt_13, pt_13, p0, gamma_a, cp_a, R_a, eta_n_s);
+
+Tt_19 = Tt_13;
+pt_19 = pt_13;
+
+
+%% ================================================================
+%  6. LOW PRESSURE COMPRESSOR, LPC
+% ================================================================
+
+%  Only the m core flow enters the LPC.
+
+pt_25 = pi_LPC*pt_13;
+Tt_25 = compressor_Tout(Tt_13, pi_LPC, gamma_a, eta_LPC);
+
+
+%% ================================================================
+%  7. HIGH PRESSURE COMPRESSOR, HPC
+% ================================================================
+
+pt_3 = pi_HPC*pt_25;
+Tt_3 = compressor_Tout(Tt_25, pi_HPC, gamma_a, eta_HPC);
+
+
+%% ================================================================
+%  8. COMBUSTOR
+% ================================================================
+
+%  The turbine inlet temperature is imposed
+
+pt_4 = pi_b*pt_3;
+
+f = fuel_air_ratio(Tt_3, Tt4, cp_a, cp_f, eta_b, h_PR);
+
+
+%% ================================================================
+%  9. HIGH PRESSURE TURBINE, HPT
+% ================================================================
+%
+%  The HPT drives the HPC.
+
+W_HPC = mdot_core*cp_a*(Tt_3 - Tt_25);
+
+%  W_HPT = eta_m*mdot_core*(1+f)*cp_f*(Tt4 - Tt45). Igualant i aillant:
+
+Tt_45 = Tt4 - W_HPC/(eta_m*mdot_core*(1 + f)*cp_f);
+
+pt_45 = turbine_Pout(pt_4, Tt4, Tt_45, gamma_f, eta_HPT);
+
+
+%% ================================================================
+%  10. LOW PRESSURE TURBINE, LPT
+% ================================================================
+%
+%  The LPT drives The fan (m_0) and LPC(m_core)
+
+W_fan = mdot0*cp_a*(Tt_13 - Tt_2);
+W_LPC = mdot_core*cp_a*(Tt_25 - Tt_13);
+
+% then W_LPT = eta_m*mdot_core*(1+f)*cp_f*(Tt45 - Tt5), Igualant i aillant
+
+Tt_5 = Tt_45 - (W_fan + W_LPC)/(eta_m*mdot_core*(1 + f)*cp_f);
+pt_5 = turbine_Pout(pt_45, Tt_45, Tt_5, gamma_f, eta_LPT);
+
+
+%% ================================================================
+%  11. PRIMARY NOZZLE
+% ================================================================
+
+%  It is also convergent, so the maximum exit Mach number is M = 1.
+%  If the nozzle is choked:
+%      M9 = 1
+%      p9 = critical pressure
+
+%  If not choked:
+%      p9 = p0
+
+[T_9, p_9, v_9, M_9, choked_prim] = convergent_nozzle(Tt_5, pt_5, p0, gamma_f, cp_f, R_f, eta_n_p);
+
+Tt_9 = Tt_5;
+pt_9 = pt_5;
+
+
+%% ================================================================
+%  12. BUILD RESULTS TABLE
+% ================================================================
+
+Stage = { ...
+    'Freestream'; ...
+    'Inlet'; ...
+    'Fan'; ...
+    'Sec. Nozzle'; ...
+    'LPC'; ...
+    'HPC'; ...
+    'Combustor'; ...
+    'HPT'; ...
+    'LPT'; ...
+    'Prim. Nozzle'};
+
+% NaN el posem per cells that are not useful
+T = [ ...
+    T_0; ...
+    NaN; ...
+    NaN; ...
+    T_19; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    T_9];
+
+Tt = [ ...
+    Tt_0; ...
+    Tt_2; ...
+    Tt_13; ...
+    Tt_19; ...
+    Tt_25; ...
+    Tt_3; ...
+    Tt4; ...
+    Tt_45; ...
+    Tt_5; ...
+    Tt_9];
+
+p_bar = [ ...
+    p_0; ...
+    NaN; ...
+    NaN; ...
+    p_19; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    p_9]/1e5;
+
+pt_bar = [ ...
+    pt_0; ...
+    pt_2; ...
+    pt_13; ...
+    pt_19; ...
+    pt_25; ...
+    pt_3; ...
+    pt_4; ...
+    pt_45; ...
+    pt_5; ...
+    pt_9]/1e5;
+
+v = [ ...
+    v_0; ...
+    NaN; ...
+    NaN; ...
+    v_19; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    v_9];
+
+M = [M0;
+    NaN; ...
+    NaN; ...
+    M_19; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    NaN; ...
+    M_9];
+
+results = table(Stage, T, Tt, p_bar, pt_bar, v, M);
+
+disp(' ');
+disp('================ THERMODYNAMIC RESULTS TABLE ================');
+disp(results);
+
+fprintf('\n================ PROP CHARACTERISTICS ================\n');
+fprintf('OPR = %.2f\n', OPR);
+fprintf('Fuel-air ratio f = %.5f\n', f);
+fprintf('Secondary nozzle choked? %d\n', choked_sec);
+fprintf('Primary nozzle choked?   %d\n', choked_prim);
+
+
+%% ================================================================
+%  THRUST ESTIMATION
+% ================================================================
+
+A19 = nozzle_area(mdot_sec, Tt_19, pt_19, M_19, gamma_a, R_a);
+
+A9 = nozzle_area(mdot_core*(1 + f), Tt_9, pt_9, M_9, gamma_f, R_f);
+
+F_sec = mdot_sec*(v_19 - v_0) + A19*(p_19 - p0);
+
+F_core = mdot_core*((1 + f)*v_9 - v_0) + A9*(p_9 - p0);
+
+F_total = F_sec + F_core;
+
+fprintf('\nA19 secondary nozzle area = %.4f m^2\n', A19);
+fprintf('A9 primary nozzle area    = %.4f m^2\n', A9);
+fprintf('Secondary thrust          = %.2f kN\n', F_sec/1000);
+fprintf('Primary thrust            = %.2f kN\n', F_core/1000);
+fprintf('Total thrust              = %.2f kN\n', F_total/1000);
+
+
+%% ================================================================
+%  PERFORMANCE PARAMETERS
+% ================================================================
+
+F_total = F_sec + F_core;
+
+mdot_f = f*mdot_core;
+
+TSFC = mdot_f/F_total; % [kg/(s N)]
+TSFC_mg = TSFC*1e6; % [mg/(s N)]
+
+g0 = 9.81;
+Isp = F_total/(mdot_f*g0); % (s)
+
+Delta_Ek_core = 0.5*mdot_core*((1 + f)*v_9^2 - v_0^2);
+Delta_Ek_sec  = 0.5*mdot_sec*(v_19^2 - v_0^2);
+Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
+
+eta_T = Delta_Ek_total/(mdot_f*h_PR);
+eta_P = F_total*v_0/Delta_Ek_total;
+eta_O = eta_T*eta_P;
+
+Performance_Parameter = { ...
+    'Thrust'; ...
+    'Thrust Specific Fuel Consumption'; ...
+    'Specific Impulse'; ...
+    'Propulsive efficiency'; ...
+    'Thermal efficiency'; ...
+    'Overall efficiency'};
+
+fprintf('\n================ PERFORMANCE PARAMETERS ================\n');
+fprintf('Thrust T                           = %.2f kN\n', F_total/1000);
+fprintf('TSFC                               = %.2f mg/(s N)\n', TSFC_mg);
+fprintf('Specific impulse Isp               = %.2f s\n', Isp);
+fprintf('Propulsive efficiency eta_P        = %.2f %%\n', eta_P*100);
+fprintf('Thermal efficiency eta_T           = %.2f %%\n', eta_T*100);
+fprintf('Overall efficiency eta_O           = %.2f %%\n', eta_O*100);

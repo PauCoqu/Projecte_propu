@@ -1,0 +1,346 @@
+function out = turbofan_cycle(inp)
+
+
+    % ================================================================
+    %  2. FREESTREAM
+    % ================================================================
+    
+    %  Inlet flight conditions.
+    
+    T_0  = inp.T0;
+    Tt_0 = total_temperature(inp.T0, inp.M0, inp.gamma_a);
+    
+    p_0  = inp.p0;
+    pt_0 = total_pressure(inp.p0, inp.M0, inp.gamma_a);
+    
+    v_0 = inp.M0*sqrt(inp.gamma_a*inp.R_a*inp.T0);
+    
+    
+    %% ================================================================
+    %  3. INLET
+    % ================================================================
+    
+    %  The inlet is assumed adiabatic, so Tt2 = Tt0
+    Tt_2 = Tt_0;
+    
+    pt_2 = inp.pi_d*pt_0;
+    
+    
+    %% ================================================================
+    %  4. FAN
+    % ================================================================
+    
+    pt_13 = inp.pi_fan*pt_2;
+    Tt_13 = compressor_Tout(Tt_2, inp.pi_fan, inp.gamma_a, inp.eta_fan);
+    
+    
+    %% ================================================================
+    %  5. SECONDARY NOZZLE
+    % ================================================================
+    
+    %  Since the sec nozzle is convergent, the max possible exit Mach is 1.
+    %
+    %  The code will check whether the nozzle is choked or not, so
+    %      if p_ambient <= p_critical  -> choked, M = 1
+    %      else  -> unchoked, p_exit = p_ambient
+    
+    [T_19, p_19, v_19, M_19, choked_sec] = convergent_nozzle(Tt_13, pt_13, inp.p0, inp.gamma_a, inp.cp_a, inp.R_a, inp.eta_n_s);
+    
+    Tt_19 = Tt_13;
+    pt_19 = pt_13;
+    
+    
+    %% ================================================================
+    %  6. LOW PRESSURE COMPRESSOR, LPC
+    % ================================================================
+    
+    %  Only the m core flow enters the LPC.
+    
+    pt_25 = inp.pi_LPC*pt_13;
+    Tt_25 = compressor_Tout(Tt_13, inp.pi_LPC, inp.gamma_a, inp.eta_LPC);
+    
+    
+    %% ================================================================
+    %  7. HIGH PRESSURE COMPRESSOR, HPC
+    % ================================================================
+    
+    pt_3 = inp.pi_HPC*pt_25;
+    Tt_3 = compressor_Tout(Tt_25, inp.pi_HPC, inp.gamma_a, inp.eta_HPC);
+    
+    
+    %% ================================================================
+    %  8. COMBUSTOR
+    % ================================================================
+    
+    %  The turbine inlet temperature is imposed
+    
+    pt_4 = inp.pi_b*pt_3;
+    
+    f = fuel_air_ratio(Tt_3, inp.Tt4, inp.cp_a, inp.cp_f, inp.eta_b, inp.h_PR);
+    
+    
+    %% ================================================================
+    %  9. HIGH PRESSURE TURBINE, HPT
+    % ================================================================
+    %
+    %  The HPT drives the HPC.
+    
+    W_HPC = inp.mdot_core*inp.cp_a*(Tt_3 - Tt_25);
+    
+    %  W_HPT = inp.eta_m*inp.mdot_core*(1+f)*inp.cp_f*(inp.Tt4 - Tt45). Igualant i aillant:
+    
+    Tt_45 = inp.Tt4 - W_HPC/(inp.eta_m*inp.mdot_core*(1 + f)*inp.cp_f);
+    
+    pt_45 = turbine_Pout(pt_4, inp.Tt4, Tt_45, inp.gamma_f, inp.eta_HPT);
+    
+    
+    %% ================================================================
+    %  10. LOW PRESSURE TURBINE, LPT
+    % ================================================================
+    %
+    %  The LPT drives The fan (m_0) and LPC(m_core)
+    
+    W_fan = inp.mdot0*inp.cp_a*(Tt_13 - Tt_2);
+    W_LPC = inp.mdot_core*inp.cp_a*(Tt_25 - Tt_13);
+    
+    % then W_LPT = inp.eta_m*inp.mdot_core*(1+f)*inp.cp_f*(Tt45 - Tt5), Igualant i aillant
+    
+    Tt_5 = Tt_45 - (W_fan + W_LPC)/(inp.eta_m*inp.mdot_core*(1 + f)*inp.cp_f);
+    pt_5 = turbine_Pout(pt_45, Tt_45, Tt_5, inp.gamma_f, inp.eta_LPT);
+    
+    
+    %% ================================================================
+    %  11. PRIMARY NOZZLE
+    % ================================================================
+    
+    %  It is also convergent, so the maximum exit Mach number is M = 1.
+    %  If the nozzle is choked:
+    %      M9 = 1
+    %      p9 = critical pressure
+    
+    %  If not choked:
+    %      p9 = inp.p0
+    
+    [T_9, p_9, v_9, M_9, choked_prim] = convergent_nozzle(Tt_5, pt_5, inp.p0, inp.gamma_f, inp.cp_f, inp.R_f, inp.eta_n_p);
+    
+    Tt_9 = Tt_5;
+    pt_9 = pt_5;
+    
+    
+    %% ================================================================
+    %  12. BUILD RESULTS TABLE
+    % ================================================================
+    
+    Stage = { ...
+        'Freestream'; ...
+        'Inlet'; ...
+        'Fan'; ...
+        'Sec. Nozzle'; ...
+        'LPC'; ...
+        'HPC'; ...
+        'Combustor'; ...
+        'HPT'; ...
+        'LPT'; ...
+        'Prim. Nozzle'};
+    
+    % NaN el posem per cells that are not useful
+    T = [ ...
+        T_0; ...
+        NaN; ...
+        NaN; ...
+        T_19; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        T_9];
+    
+    Tt = [ ...
+        Tt_0; ...
+        Tt_2; ...
+        Tt_13; ...
+        Tt_19; ...
+        Tt_25; ...
+        Tt_3; ...
+        inp.Tt4; ...
+        Tt_45; ...
+        Tt_5; ...
+        Tt_9];
+    
+    p_bar = [ ...
+        p_0; ...
+        NaN; ...
+        NaN; ...
+        p_19; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        p_9]/1e5;
+    
+    pt_bar = [ ...
+        pt_0; ...
+        pt_2; ...
+        pt_13; ...
+        pt_19; ...
+        pt_25; ...
+        pt_3; ...
+        pt_4; ...
+        pt_45; ...
+        pt_5; ...
+        pt_9]/1e5;
+    
+    v = [ ...
+        v_0; ...
+        NaN; ...
+        NaN; ...
+        v_19; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        v_9];
+    
+    M = [inp.M0;
+        NaN; ...
+        NaN; ...
+        M_19; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        NaN; ...
+        M_9];
+    
+    results = table(Stage, T, Tt, p_bar, pt_bar, v, M);
+
+    %DE MOMENT TREC AQUESTES TAULES PERQ LA FUNCIO GENERAL JA HO FARÀ
+    
+    % disp(' ');
+    % disp('================ THERMODYNAMIC RESULTS TABLE ================');
+    % disp(results);
+    
+    % fprintf('\n================ PROP CHARACTERISTICS ================\n');
+    % fprintf('OPR = %.2f\n', inp.OPR);
+    % fprintf('Fuel-air ratio f = %.5f\n', f);
+    % fprintf('Secondary nozzle choked? %d\n', choked_sec);
+    % fprintf('Primary nozzle choked?   %d\n', choked_prim);
+
+    
+    
+    
+    %% ================================================================
+    %  THRUST ESTIMATION
+    % ================================================================
+    
+    A19 = nozzle_area(inp.mdot_sec, Tt_19, pt_19, M_19, inp.gamma_a, inp.R_a);
+    
+    A9 = nozzle_area(inp.mdot_core*(1 + f), Tt_9, pt_9, M_9, inp.gamma_f, inp.R_f);
+    
+    F_sec = inp.mdot_sec*(v_19 - v_0) + A19*(p_19 - inp.p0);
+    
+    F_core = inp.mdot_core*((1 + f)*v_9 - v_0) + A9*(p_9 - inp.p0);
+    
+    F_total = F_sec + F_core;
+    
+    % fprintf('\nA19 secondary nozzle area = %.4f m^2\n', A19);
+    % fprintf('A9 primary nozzle area    = %.4f m^2\n', A9);
+    % fprintf('Secondary thrust          = %.2f kN\n', F_sec/1000);
+    % fprintf('Primary thrust            = %.2f kN\n', F_core/1000);
+    % fprintf('Total thrust              = %.2f kN\n', F_total/1000);
+    
+    
+    %% ================================================================
+    %  PERFORMANCE PARAMETERS
+    % ================================================================
+    
+    F_total = F_sec + F_core;
+    
+    mdot_f = f*inp.mdot_core;
+    
+    TSFC = mdot_f/F_total; % [kg/(s N)]
+    TSFC_mg = TSFC*1e6; % [mg/(s N)]
+    
+    g0 = 9.81;
+    Isp = F_total/(mdot_f*g0); % (s)
+    
+    Delta_Ek_core = 0.5*inp.mdot_core*((1 + f)*v_9^2 - v_0^2);
+    Delta_Ek_sec  = 0.5*inp.mdot_sec*(v_19^2 - v_0^2);
+    Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
+    
+    eta_T = Delta_Ek_total/(mdot_f*inp.h_PR);
+    eta_P = F_total*v_0/Delta_Ek_total;
+    eta_O = eta_T*eta_P;
+    
+    Performance_Parameter = { ...
+        'Thrust'; ...
+        'Thrust Specific Fuel Consumption'; ...
+        'Specific Impulse'; ...
+        'Propulsive efficiency'; ...
+        'Thermal efficiency'; ...
+        'Overall efficiency'};
+    
+    % fprintf('\n================ PERFORMANCE PARAMETERS ================\n');
+    % fprintf('Thrust T                           = %.2f kN\n', F_total/1000);
+    % fprintf('TSFC                               = %.2f mg/(s N)\n', TSFC_mg);
+    % fprintf('Specific impulse Isp               = %.2f s\n', Isp);
+    % fprintf('Propulsive efficiency eta_P        = %.2f %%\n', eta_P*100);
+    % fprintf('Thermal efficiency eta_T           = %.2f %%\n', eta_T*100);
+    % fprintf('Overall efficiency eta_O           = %.2f %%\n', eta_O*100);
+    
+
+    %% ================================================================
+    %  Outputs
+    % ================================================================
+    
+    out.results = results;
+    
+    out.OPR = inp.pi_fan*inp.pi_LPC*inp.pi_HPC;
+    out.f = f;
+    
+    out.A19 = A19;
+    out.A9 = A9;
+    
+    out.F_sec = F_sec;
+    out.F_core = F_core;
+    out.F_total = F_total;
+    
+    out.Thrust_kN = F_total/1000;
+    out.TSFC_mg = TSFC_mg;
+    out.Isp = Isp;
+    
+    out.eta_T = eta_T;
+    out.eta_P = eta_P;
+    out.eta_O = eta_O;
+    
+    out.M_19 = M_19;
+    out.M_9 = M_9;
+    
+    out.choked_sec = choked_sec;
+    out.choked_prim = choked_prim;
+    
+    out.performance_table = table( ...
+        {'Thrust'; ...
+         'Thrust Specific Fuel Consumption'; ...
+         'Specific Impulse'; ...
+         'Propulsive efficiency'; ...
+         'Thermal efficiency'; ...
+         'Overall efficiency'}, ...
+        [F_total/1000; ...
+         TSFC_mg; ...
+         Isp; ...
+         eta_P*100; ...
+         eta_T*100; ...
+         eta_O*100], ...
+        {'kN'; ...
+         'mg/s/N'; ...
+         's'; ...
+         '%'; ...
+         '%'; ...
+         '%'}, ...
+        'VariableNames', {'Performance_Parameter','Value','Unit'});
+
+end
