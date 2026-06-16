@@ -47,7 +47,7 @@ function out = turbofan_cycle(inp)
     [T_19, p_19, v_19, M_19, choked_sec] = convergent_nozzle(Tt_13, pt_13, inp.p0, inp.gamma_a, inp.cp_a, inp.R_a, inp.eta_n_s);
     
     Tt_19 = Tt_13;
-    pt_19 = pt_13;
+    pt_19 = p_19 * (Tt_19/T_19)^(1.4/(1.4-1));
     
     
     %% ================================================================
@@ -58,6 +58,10 @@ function out = turbofan_cycle(inp)
     
     pt_25 = inp.pi_LPC*pt_13;
     Tt_25 = compressor_Tout(Tt_13, inp.pi_LPC, inp.gamma_a, inp.eta_LPC);
+
+    mdot_core = inp.mdot_c25 * (pt_25/inp.pref) / sqrt(Tt_25/inp.Tref);
+    mdot_sec = inp.alpha*mdot_core;
+    mdot0 = mdot_core + mdot_sec;
     
     
     %% ================================================================
@@ -85,11 +89,11 @@ function out = turbofan_cycle(inp)
     %
     %  The HPT drives the HPC.
     
-    W_HPC = inp.mdot_core*inp.cp_a*(Tt_3 - Tt_25);
+    W_HPC = mdot_core*inp.cp_a*(Tt_3 - Tt_25);
     
-    %  W_HPT = inp.eta_m*inp.mdot_core*(1+f)*inp.cp_f*(inp.Tt4 - Tt45). Igualant i aillant:
+    %  W_HPT = inp.eta_m*mdot_core*(1+f)*inp.cp_f*(inp.Tt4 - Tt45). Igualant i aillant:
     
-    Tt_45 = inp.Tt4 - W_HPC/(inp.eta_m*inp.mdot_core*(1 + f)*inp.cp_f);
+    Tt_45 = inp.Tt4 - W_HPC/(inp.eta_m*mdot_core*(1 + f)*inp.cp_f);
     
     pt_45 = turbine_Pout(pt_4, inp.Tt4, Tt_45, inp.gamma_f, inp.eta_HPT);
     
@@ -100,12 +104,12 @@ function out = turbofan_cycle(inp)
     %
     %  The LPT drives The fan (m_0) and LPC(m_core)
     
-    W_fan = inp.mdot0*inp.cp_a*(Tt_13 - Tt_2);
-    W_LPC = inp.mdot_core*inp.cp_a*(Tt_25 - Tt_13);
+    W_fan = mdot0*inp.cp_a*(Tt_13 - Tt_2);
+    W_LPC = mdot_core*inp.cp_a*(Tt_25 - Tt_13);
     
-    % then W_LPT = inp.eta_m*inp.mdot_core*(1+f)*inp.cp_f*(Tt45 - Tt5), Igualant i aillant
+    % then W_LPT = inp.eta_m*mdot_core*(1+f)*inp.cp_f*(Tt45 - Tt5), Igualant i aillant
     
-    Tt_5 = Tt_45 - (W_fan + W_LPC)/(inp.eta_m*inp.mdot_core*(1 + f)*inp.cp_f);
+    Tt_5 = Tt_45 - (W_fan + W_LPC)/(inp.eta_m*mdot_core*(1 + f)*inp.cp_f);
     pt_5 = turbine_Pout(pt_45, Tt_45, Tt_5, inp.gamma_f, inp.eta_LPT);
     
     
@@ -124,7 +128,7 @@ function out = turbofan_cycle(inp)
     [T_9, p_9, v_9, M_9, choked_prim] = convergent_nozzle(Tt_5, pt_5, inp.p0, inp.gamma_f, inp.cp_f, inp.R_f, inp.eta_n_p);
     
     Tt_9 = Tt_5;
-    pt_9 = pt_5;
+    pt_9 = p_9 * (Tt_9/T_9)^(1.3/(1.3-1));
     
     
     %% ================================================================
@@ -236,13 +240,13 @@ function out = turbofan_cycle(inp)
     %  THRUST ESTIMATION
     % ================================================================
     
-    A19 = nozzle_area(inp.mdot_sec, Tt_19, pt_19, M_19, inp.gamma_a, inp.R_a);
+    A19 = nozzle_area(mdot_sec, Tt_19, pt_19, M_19, inp.gamma_a, inp.R_a);
     
-    A9 = nozzle_area(inp.mdot_core*(1 + f), Tt_9, pt_9, M_9, inp.gamma_f, inp.R_f);
+    A9 = nozzle_area(mdot_core*(1 + f), Tt_9, pt_9, M_9, inp.gamma_f, inp.R_f);
     
-    F_sec = inp.mdot_sec*(v_19 - v_0) + A19*(p_19 - inp.p0);
+    F_sec = mdot_sec*(v_19 - v_0) + A19*(p_19 - inp.p0);
     
-    F_core = inp.mdot_core*((1 + f)*v_9 - v_0) + A9*(p_9 - inp.p0);
+    F_core = mdot_core*((1 + f)*v_9 - v_0) + A9*(p_9 - inp.p0);
     
     F_total = F_sec + F_core;
     
@@ -259,7 +263,7 @@ function out = turbofan_cycle(inp)
     
     F_total = F_sec + F_core;
     
-    mdot_f = f*inp.mdot_core;
+    mdot_f = f*mdot_core;
     
     TSFC = mdot_f/F_total; % [kg/(s N)]
     TSFC_mg = TSFC*1e6; % [mg/(s N)]
@@ -267,8 +271,8 @@ function out = turbofan_cycle(inp)
     g0 = 9.81;
     Isp = F_total/(mdot_f*g0); % (s)
     
-    Delta_Ek_core = 0.5*inp.mdot_core*((1 + f)*v_9^2 - v_0^2);
-    Delta_Ek_sec  = 0.5*inp.mdot_sec*(v_19^2 - v_0^2);
+    Delta_Ek_core = 0.5*mdot_core*((1 + f)*v_9^2 - v_0^2);
+    Delta_Ek_sec  = 0.5*mdot_sec*(v_19^2 - v_0^2);
     Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
     
     eta_T = Delta_Ek_total/(mdot_f*inp.h_PR);

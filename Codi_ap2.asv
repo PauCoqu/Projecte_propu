@@ -15,9 +15,9 @@ clear; clc;
 % -------------------------
 % Flight condition
 % -------------------------
-M0 = 0.79;                 % [-]
+M0 = 0.85;                 % [-]
 T0 = 216.65;               % [K]
-p0 = 0.19e5;               % [Pa]
+p0 = 0.1875e5;             % [Pa]
 
 % -------------------------
 % Reference conditions
@@ -28,19 +28,19 @@ pref = 1e5;                % [Pa]
 % -------------------------
 % Mass flows
 % -------------------------
-mdot_core = 28.14;         % [kg/s]
-mdot_sec  = 309.50;        % [kg/s]
-mdot0     = 337.64;        % [kg/s]
+% mdot_core = ;         % [kg/s]
+% mdot_sec  = ;        % [kg/s]
+% mdot0     = ;        % [kg/s]
 
 % Bypass ratio
-alpha = 11;
+alpha = 8.1;
 
 % -------------------------
 % Pressure ratios
 % -------------------------
-pi_d   = 0.96;             % inlet pressure recovery
-pi_fan = 1.5;              % fan pressure ratio
-pi_LPC = 3.03;             % low pressure compressor ratio
+pi_d   = 0.98;             % inlet pressure recovery
+pi_fan = 1.45;              % fan pressure ratio
+pi_LPC = 5.057;             % low pressure compressor ratio
 pi_HPC = 6.6;              % high pressure compressor ratio
 pi_b   = 0.95;             % combustor pressure ratio
 
@@ -123,7 +123,7 @@ Tt_13 = compressor_Tout(Tt_2, pi_fan, gamma_a, eta_fan);
 %
 %  The code will check whether the nozzle is choked or not, so
 %      if p_ambient <= p_critical  -> choked, M = 1
-%      else                        -> unchoked, p_exit = p_ambient
+%      else  -> unchoked, p_exit = p_ambient
 
 [T_19, p_19, v_19, M_19, choked_sec] = convergent_nozzle(Tt_13, pt_13, p0, gamma_a, cp_a, R_a, eta_n_s);
 
@@ -168,13 +168,7 @@ f = fuel_air_ratio(Tt_3, Tt4, cp_a, cp_f, eta_b, h_PR);
 
 W_HPC = mdot_core*cp_a*(Tt_3 - Tt_25);
 
-%  W_HPT = eta_m*mdot_core*(1+f)*cp_f*(Tt4 - Tt45)
-%
-%  Equating both:
-%
-%      Tt45 = Tt4 - W_HPC/[eta_m*mdot_core*(1+f)*cp_f]
-%
-%  The pressure drop is obtained from turbine efficiency.
+%  W_HPT = eta_m*mdot_core*(1+f)*cp_f*(Tt4 - Tt45). Igualant i aillant:
 
 Tt_45 = Tt4 - W_HPC/(eta_m*mdot_core*(1 + f)*cp_f);
 
@@ -190,7 +184,7 @@ pt_45 = turbine_Pout(pt_4, Tt4, Tt_45, gamma_f, eta_HPT);
 W_fan = mdot0*cp_a*(Tt_13 - Tt_2);
 W_LPC = mdot_core*cp_a*(Tt_25 - Tt_13);
 
-% then W_LPT = eta_m*mdot_core*(1+f)*cp_f*(Tt45 - Tt5), aillant
+% then W_LPT = eta_m*mdot_core*(1+f)*cp_f*(Tt45 - Tt5), Igualant i aillant
 
 Tt_5 = Tt_45 - (W_fan + W_LPC)/(eta_m*mdot_core*(1 + f)*cp_f);
 pt_5 = turbine_Pout(pt_45, Tt_45, Tt_5, gamma_f, eta_LPT);
@@ -305,10 +299,10 @@ M = [M0;
 results = table(Stage, T, Tt, p_bar, pt_bar, v, M);
 
 disp(' ');
-disp('================ RESULTS TABLE ================');
+disp('================ THERMODYNAMIC RESULTS TABLE ================');
 disp(results);
 
-fprintf('\n================ ADDITIONAL INFORMATION ================\n');
+fprintf('\n================ PROP CHARACTERISTICS ================\n');
 fprintf('OPR = %.2f\n', OPR);
 fprintf('Fuel-air ratio f = %.5f\n', f);
 fprintf('Secondary nozzle choked? %d\n', choked_sec);
@@ -316,23 +310,8 @@ fprintf('Primary nozzle choked?   %d\n', choked_prim);
 
 
 %% ================================================================
-%  13. OPTIONAL: THRUST ESTIMATION
+%  THRUST ESTIMATION
 % ================================================================
-%
-%  This part is not strictly necessary for your requested table, but it is
-%  useful to check if the result is coherent.
-%
-%  If a nozzle is choked, pressure thrust exists:
-%
-%      F = mdot*(v_exit - v0) + A_exit*(p_exit - p0)
-%
-%  For the primary stream:
-%
-%      F_core = mdot_core*((1+f)*v9 - v0) + A9*(p9 - p0)
-%
-%  For the secondary stream:
-%
-%      F_sec = mdot_sec*(v19 - v0) + A19*(p19 - p0)
 
 A19 = nozzle_area(mdot_sec, Tt_19, pt_19, M_19, gamma_a, R_a);
 
@@ -352,87 +331,39 @@ fprintf('Total thrust              = %.2f kN\n', F_total/1000);
 
 
 %% ================================================================
-%  AUXILIARY FUNCTIONS
+%  PERFORMANCE PARAMETERS
 % ================================================================
 
-function Tt = total_temperature(T, M, gamma)
-    % Total temperature from static temperature and Mach number:
-    Tt = T*(1 + (gamma - 1)/2*M^2);
-end
+F_total = F_sec + F_core;
 
+mdot_f = f*mdot_core;
 
-function pt = total_pressure(p, M, gamma)
-    % Total pressure from static pressure and Mach number:
-    pt = p*(1 + (gamma - 1)/2*M^2)^(gamma/(gamma - 1));
-end
+TSFC = mdot_f/F_total; % [kg/(s N)]
+TSFC_mg = TSFC*1e6; % [mg/(s N)]
 
+g0 = 9.81;
+Isp = F_total/(mdot_f*g0); % (s)
 
-function Tt_out = compressor_Tout(Tt_in, pi_c, gamma, eta_c)
-    % Compressor/fan outlet total temperature:
-    Tt_out = Tt_in*(1 + (pi_c^((gamma - 1)/gamma) - 1)/eta_c);
-end
+Delta_Ek_core = 0.5*mdot_core*((1 + f)*v_9^2 - v_0^2);
+Delta_Ek_sec  = 0.5*mdot_sec*(v_19^2 - v_0^2);
+Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
 
+eta_T = Delta_Ek_total/(mdot_f*h_PR);
+eta_P = F_total*v_0/Delta_Ek_total;
+eta_O = eta_T*eta_P;
 
-function f = fuel_air_ratio(Tt3, Tt4, cp_a, cp_f, eta_b, h_PR)
-    
-    % We do energy conservation al combustor:
-    % eta_b*f*h_PR = (1+f)*cp_f*Tt4 - cp_a*Tt3
-    
-    % aillant:
-    f = (cp_f*Tt4 - cp_a*Tt3)/(eta_b*h_PR - cp_f*Tt4);
-end
+Performance_Parameter = { ...
+    'Thrust'; ...
+    'Thrust Specific Fuel Consumption'; ...
+    'Specific Impulse'; ...
+    'Propulsive efficiency'; ...
+    'Thermal efficiency'; ...
+    'Overall efficiency'};
 
-
-function pt_out = turbine_Pout(pt_in, Tt_in, Tt_out, gamma, eta_t)
-    % Turbine outlet total pressure from turbine efficiency.
-
-    Tt_out_s = Tt_in - (Tt_in - Tt_out)/eta_t;
-    pt_out = pt_in*(Tt_out_s/Tt_in)^(gamma/(gamma - 1));
-end
-
-
-function [T_exit, p_exit, v_exit, M_exit, choked] = convergent_nozzle(Tt_in, pt_in, p_amb, gamma, cp, R, eta_n)
-
-    p_crit = pt_in * (1 - (1/eta_n)*(gamma - 1)/(gamma + 1))^(gamma/(gamma - 1));
-
-    if p_amb <= p_crit     % If ambient pressure is below this critical pressure, the nozzle is choked and the exit Mach number is M = 1.
-
-        % La nozzle is chocked
-        choked = true;
-        M_exit = 1;
-
-        T_exit = Tt_in/(1 + (gamma - 1)/2*M_exit^2);
-
-        % P statica is P critica
-        p_exit = p_crit;
-
-        v_exit = M_exit*sqrt(gamma*R*T_exit);
-
-    else     % If ambient pressure is above the critical pressure, the nozzle is unchoked and expands to ambient pressure.
-
-        % La nozzle no chocked
-        choked = false;
-
-        % S'adapta a la p ambient
-        p_exit = p_amb;
-
-        T_exit_ideal = Tt_in*(p_exit/pt_in)^((gamma - 1)/gamma);
-        T_exit = Tt_in - eta_n*(Tt_in - T_exit_ideal);
-
-        v_exit = sqrt(2*cp*(Tt_in - T_exit));
-
-        M_exit = v_exit/sqrt(gamma*R*T_exit); %Mach
-    end
-end
-
-
-function valor = MFP(M, gamma)
-    % We calculate the MFP
-    valor= sqrt(gamma)*M*(1+ (gamma - 1)/2*M^2)^(-(gamma + 1)/(2*(gamma - 1)));
-end
-
-
-function A = nozzle_area(mdot, Tt, pt, M, gamma, R)
-    % Nozzle area from the MFP
-    A = mdot*sqrt(R*Tt)/(pt*MFP(M, gamma));
-end
+fprintf('\n================ PERFORMANCE PARAMETERS ================\n');
+fprintf('Thrust T                           = %.2f kN\n', F_total/1000);
+fprintf('TSFC                               = %.2f mg/(s N)\n', TSFC_mg);
+fprintf('Specific impulse Isp               = %.2f s\n', Isp);
+fprintf('Propulsive efficiency eta_P        = %.2f %%\n', eta_P*100);
+fprintf('Thermal efficiency eta_T           = %.2f %%\n', eta_T*100);
+fprintf('Overall efficiency eta_O           = %.2f %%\n', eta_O*100);

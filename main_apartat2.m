@@ -4,48 +4,46 @@ clear; clc;
 %  BASELINE INPUT DATA
 % ================================================================
 
-inp.M0 = 0.79;
+inp.M0 = 0.85;
 inp.T0 = 216.65;
-inp.p0 = 0.19e5;
+inp.p0 = 0.1875e5;
 
 inp.Tref = 300;
 inp.pref = 1e5;
 
-inp.mdot_core = 28.14;
-inp.mdot_sec  = 309.50;
-inp.mdot0     = 337.64;
+inp.mdot_c25 = 20;
 
-inp.alpha = 11;
+inp.alpha = 8.1;
 
-inp.pi_d   = 0.96;
-inp.pi_fan = 1.5;
-inp.pi_LPC = 3.03;
+inp.pi_d   = 0.98;
+inp.pi_fan = 1.45;
+inp.pi_LPC = 5.057; 
 inp.pi_HPC = 6.6;
-inp.pi_b   = 0.95;
+inp.pi_b   = 0.90;
 
 inp.OPR = inp.pi_fan*inp.pi_LPC*inp.pi_HPC;
 
 inp.eta_fan = 0.85;
-inp.eta_LPC = 0.85;
+inp.eta_LPC = 0.83;
 inp.eta_HPC = 0.85;
 
-inp.eta_HPT = 0.83;
-inp.eta_LPT = 0.85;
+inp.eta_HPT = 0.80;
+inp.eta_LPT = 0.81;
 
-inp.eta_m = 0.995;
+inp.eta_m = 0.95; %(mateixa per HP i LP)
 
 inp.eta_n_p = 0.90;
-inp.eta_n_s = 0.91;
+inp.eta_n_s = 0.90;
 
 inp.eta_b = 1.0;
 
 inp.gamma_a = 1.4;
-inp.cp_a = 1004.5;
-inp.R_a = 287;
+inp.cp_a = 1004.5; % [J/(kg K)]
+inp.R_a = 287; % [J/(kg K)]
 
 inp.gamma_f = 1.3;
-inp.cp_f = 1239;
-inp.R_f = inp.cp_f*(inp.gamma_f - 1)/inp.gamma_f;
+inp.cp_f = 1239; % [J/(kg K)]
+inp.R_f = inp.cp_f*(inp.gamma_f - 1)/inp.gamma_f; % [J/(kg K)]
 
 inp.Tt4 = 1800;
 inp.h_PR = 42.5e6;
