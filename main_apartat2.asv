@@ -105,8 +105,7 @@ for i = 1:length(pi_LPC_vec)
                 out_s1.eta_P, ...
                 out_s1.eta_T, ...
                 out_s1.eta_O];
-            
-            % faig aixo perq segons quin em dona imaginari infim i fa error
+
             valid_solution = all(isreal(values)) && all(isfinite(values)) && all(values > 0);
 
             if valid_solution
@@ -325,8 +324,7 @@ for i = 1:length(pi_LPC_vec2)
                 out_s2.eta_P, ...
                 out_s2.eta_T, ...
                 out_s2.eta_O];
-            
-            % faig aixo perq segons quin em dona imaginari infim i fa error
+
             valid_solution = all(isreal(values)) && ...
                 all(isfinite(values)) && ...
                 all(values > 0) && ...
@@ -374,24 +372,35 @@ title(t, 'Escenari 2', ...
 
 
 % Empenta
+
 nexttile;
+
 contourf(PI_LPC2, PI_HPC2, Thrust_map2, 20,'LineColor', 'none');
+
 colorbar;
+
 xlabel('\pi_{LPC}');
 ylabel('\pi_{HPC}');
 title('Empenta [kN]');
+
 hold on;
+
 plot(inp.pi_LPC, inp.pi_HPC,'rx', 'MarkerSize', 12,'LineWidth', 2);
+
 text(inp.pi_LPC + 0.3, inp.pi_HPC + 0.15,sprintf('T = %.2f kN', out_base.Thrust_kN), ...
     'Color', 'red', 'FontWeight', 'bold', 'FontSize', 10);
+
 hold off;
 
 
 % TSFC
 
 nexttile;
+
 contourf(PI_LPC2, PI_HPC2, TSFC_map2, 20, 'LineColor', 'none');
+
 colorbar;
+
 xlabel('\pi_{LPC}');
 ylabel('\pi_{HPC}');
 title('TSFC [mg/(s·N)]');
@@ -443,31 +452,56 @@ hold off;
 
 % Eficiència tèrmica
 nexttile;
+
 contourf(PI_LPC2, PI_HPC2, eta_T_map2, 20, ...
     'LineColor', 'none');
+
 colorbar;
+
 xlabel('\pi_{LPC}');
 ylabel('\pi_{HPC}');
 title('Eficiència tèrmica [%]');
+
 hold on;
-plot(inp.pi_LPC, inp.pi_HPC, 'rx','MarkerSize', 12, 'LineWidth', 2);
-text(inp.pi_LPC + 0.3, inp.pi_HPC + 0.15, sprintf('\\eta_T = %.2f %%', 100*out_base.eta_T), ...
-    'Color', 'red', 'FontWeight', 'bold', 'FontSize', 10);
+
+plot(inp.pi_LPC, inp.pi_HPC, ...
+    'rx', ...
+    'MarkerSize', 12, ...
+    'LineWidth', 2);
+
+text(inp.pi_LPC + 0.3, inp.pi_HPC + 0.15, ...
+    sprintf('\\eta_T = %.2f %%', 100*out_base.eta_T), ...
+    'Color', 'red', ...
+    'FontWeight', 'bold', ...
+    'FontSize', 10);
+
 hold off;
+
 
 % Eficiència global
 
 nexttile;
-contourf(PI_LPC2, PI_HPC2, eta_O_map2, 20,'LineColor', 'none');
+
+contourf(PI_LPC2, PI_HPC2, eta_O_map2, 20, ...
+    'LineColor', 'none');
+
 colorbar;
+
 xlabel('\pi_{LPC}');
 ylabel('\pi_{HPC}');
 title('Eficiència global [%]');
 
 hold on;
-plot(inp.pi_LPC, inp.pi_HPC,'rx','MarkerSize', 12,'LineWidth', 2);
+
+plot(inp.pi_LPC, inp.pi_HPC, ...
+    'rx', ...
+    'MarkerSize', 12, ...
+    'LineWidth', 2);
 
 text(inp.pi_LPC + 0.3, inp.pi_HPC + 0.15, ...
     sprintf('\\eta_O = %.2f %%', 100*out_base.eta_O), ...
-    'Color', 'red', 'FontWeight', 'bold', 'FontSize', 10);
+    'Color', 'red', ...
+    'FontWeight', 'bold', ...
+    'FontSize', 10);
+
 hold off;

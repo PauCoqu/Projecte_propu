@@ -66,8 +66,7 @@ function out = turbofan_cycle(inp)
         mdot_core = inp.mdot_c25 * ...
             (pt_25/inp.pref) / sqrt(Tt_25/inp.Tref);
     end
-
-    %mdot_core = inp.mdot_c25 * (pt_25/inp.pref) / sqrt(Tt_25/inp.Tref);
+    mdot_core = inp.mdot_c25 * (pt_25/inp.pref) / sqrt(Tt_25/inp.Tref);
     mdot_sec = inp.alpha*mdot_core;
     mdot0 = mdot_core + mdot_sec;
     
@@ -307,13 +306,6 @@ function out = turbofan_cycle(inp)
     
     out.choked_sec = choked_sec;
     out.choked_prim = choked_prim;
-
-    out.OPR = inp.pi_fan*inp.pi_LPC*inp.pi_HPC;
-    out.f = f;
-    
-    out.mdot_core = mdot_core;
-    out.mdot_sec = mdot_sec;
-    out.mdot0 = mdot0;
     
     out.performance_table = table( ...
         {'Thrust'; ...

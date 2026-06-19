@@ -351,7 +351,8 @@ Delta_Ek_core = 0.5*mdot_core*((1 + f)*v_9^2 - v_0^2);
 Delta_Ek_sec  = 0.5*mdot_sec*(v_19^2 - v_0^2);
 Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
 
-eta_T = Delta_Ek_total/(mdot_f*h_PR);
+eta_T_dolent = Delta_Ek_total/(mdot_f*h_PR);
+eta_T = (F_total*v_0 + 0.5*mdot_core*(1+f)*(v_9-v_0)^2 + 0.5*mdot_sec*(v_19-v_0)^2) / (mdot_f*h_PR);
 eta_P_dolent = F_total*v_0/Delta_Ek_total;
 eta_P = F_total*v_0/(F_total*v_0+0.5*mdot_core*(1+f)*(v_9-v_0)^2+0.5*mdot_sec*(v_19-v_0)^2);
 eta_O = eta_T*eta_P;

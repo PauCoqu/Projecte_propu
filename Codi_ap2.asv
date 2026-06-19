@@ -26,11 +26,10 @@ Tref = 300;                % [K]
 pref = 1e5;                % [Pa]
 
 % -------------------------
-% Mass flows
+% Mass flow
 % -------------------------
-% mdot_core = ;         % [kg/s]
-% mdot_sec  = ;        % [kg/s]
-% mdot0     = ;        % [kg/s]
+mdot_c25 = 20;         % [kg/s]
+
 
 % Bypass ratio
 alpha = 8.1;
@@ -42,7 +41,7 @@ pi_d   = 0.98;             % inlet pressure recovery
 pi_fan = 1.45;              % fan pressure ratio
 pi_LPC = 5.057;             % low pressure compressor ratio
 pi_HPC = 6.6;              % high pressure compressor ratio
-pi_b   = 0.95;             % combustor pressure ratio
+pi_b   = 0.90;             % combustor pressure ratio
 
 % Overall pressure ratio check:
 OPR = pi_fan*pi_LPC*pi_HPC;
@@ -51,16 +50,16 @@ OPR = pi_fan*pi_LPC*pi_HPC;
 % Efficiencies
 % -------------------------
 eta_fan = 0.85;
-eta_LPC = 0.85;
+eta_LPC = 0.83;
 eta_HPC = 0.85;
 
-eta_HPT = 0.83;
-eta_LPT = 0.85;
+eta_HPT = 0.80;
+eta_LPT = 0.81;
 
-eta_m = 0.995;             % mechanical efficiency
+eta_m = 0.95;              % mechanical efficiency (mateixa per HP i LP)
 
 eta_n_p = 0.90;            % primary nozzle efficiency
-eta_n_s = 0.91;            % secondary nozzle efficiency
+eta_n_s = 0.90;            % secondary nozzle efficiency
 
 eta_b = 1.0;               % combustion efficiency
 
@@ -128,7 +127,7 @@ Tt_13 = compressor_Tout(Tt_2, pi_fan, gamma_a, eta_fan);
 [T_19, p_19, v_19, M_19, choked_sec] = convergent_nozzle(Tt_13, pt_13, p0, gamma_a, cp_a, R_a, eta_n_s);
 
 Tt_19 = Tt_13;
-pt_19 = pt_13;
+pt_19 = p_19 * (Tt_19/T_19)^(1.4/(1.4-1));
 
 
 %% ================================================================
@@ -139,6 +138,10 @@ pt_19 = pt_13;
 
 pt_25 = pi_LPC*pt_13;
 Tt_25 = compressor_Tout(Tt_13, pi_LPC, gamma_a, eta_LPC);
+
+mdot_core = mdot_c25 * (pt_25/pref) / sqrt(Tt_25/Tref);
+mdot_sec = alpha*mdot_core;
+mdot0 = mdot_core + mdot_sec;
 
 
 %% ================================================================
@@ -205,7 +208,7 @@ pt_5 = turbine_Pout(pt_45, Tt_45, Tt_5, gamma_f, eta_LPT);
 [T_9, p_9, v_9, M_9, choked_prim] = convergent_nozzle(Tt_5, pt_5, p0, gamma_f, cp_f, R_f, eta_n_p);
 
 Tt_9 = Tt_5;
-pt_9 = pt_5;
+pt_9 = p_9 * (Tt_9/T_9)^(1.3/(1.3-1));
 
 
 %% ================================================================
@@ -348,8 +351,10 @@ Delta_Ek_core = 0.5*mdot_core*((1 + f)*v_9^2 - v_0^2);
 Delta_Ek_sec  = 0.5*mdot_sec*(v_19^2 - v_0^2);
 Delta_Ek_total = Delta_Ek_core + Delta_Ek_sec;
 
-eta_T = Delta_Ek_total/(mdot_f*h_PR);
-eta_P = F_total*v_0/Delta_Ek_total;
+eta_T_dolent = Delta_Ek_total/(mdot_f*h_PR);
+eta_T = (F_total*v_0 + 0.5*mdot_core*(1+f))
+eta_P_dolent = F_total*v_0/Delta_Ek_total;
+eta_P = F_total*v_0/(F_total*v_0+0.5*mdot_core*(1+f)*(v_9-v_0)^2+0.5*mdot_sec*(v_19-v_0)^2);
 eta_O = eta_T*eta_P;
 
 Performance_Parameter = { ...
